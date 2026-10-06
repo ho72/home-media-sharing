@@ -3,6 +3,8 @@ dist/
 build/
 .env
 .env.local
+.env.*
+!.env.example
 .env.bak*
 *.bak
 *.bak.*
@@ -12,6 +14,10 @@ build/
 *.tsbuildinfo
 
 # Runtime data
+data/
+*.db
+*.db-*
+*.sqlite*
 data/originals/*
 data/thumbs/*
 data/db/*
