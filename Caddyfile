@@ -1,0 +1,22 @@
+{$OURI_ADDRESS:localhost} {
+    tls internal
+    encode zstd gzip
+
+    request_body {
+        max_size 10GB
+    }
+
+    handle /api/* {
+        reverse_proxy app:3000
+    }
+
+    handle /media/* {
+        reverse_proxy app:3000
+    }
+
+    handle {
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }
+}

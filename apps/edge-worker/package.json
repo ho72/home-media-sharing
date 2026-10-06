@@ -1,0 +1,11 @@
+{
+  "name": "@app/edge-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "types": "npx wrangler types"
+  }
+}

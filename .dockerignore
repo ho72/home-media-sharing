@@ -1,0 +1,8 @@
+node_modules
+data
+apps/server/dist
+apps/web/dist
+demo_ui_design
+.claude
+*.tsbuildinfo
+npm-debug.log

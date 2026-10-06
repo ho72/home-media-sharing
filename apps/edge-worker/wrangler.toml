@@ -1,0 +1,9 @@
+name = "ouri-media-cache"
+main = "src/index.ts"
+compatibility_date = "2026-06-03"
+workers_dev = true
+
+[vars]
+SESSION_COOKIE_NAME = "photoapp_sid"
+AUTH_CACHE_TTL_SECONDS = "120"
+THUMB_CACHE_TTL_SECONDS = "31536000"

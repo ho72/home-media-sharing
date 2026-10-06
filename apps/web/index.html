@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#fafaf9" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Ouri" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Ouri</title>
+    <script>
+      // 메인/로그인/회원가입 페이지 또는 PWA 모드일 때만 splash 표시.
+      // 그 외 페이지 새로고침엔 즉시 숨김 — 인라인 스크립트라 splash 렌더링 전에 결정됨.
+      (function () {
+        var path = location.pathname;
+        var isEntryRoute = path === '/' || path === '/login' || path === '/signup';
+        var isPWA =
+          (window.matchMedia &&
+            window.matchMedia('(display-mode: standalone)').matches) ||
+          window.navigator.standalone === true;
+        if (isPWA) {
+          document.documentElement.classList.add('is-standalone');
+        }
+        if (!(isEntryRoute || isPWA)) {
+          document.documentElement.classList.add('no-splash');
+        }
+      })();
+    </script>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #fafaf9; }
+      body {
+        font-family:
+          'Pretendard Variable', Pretendard, -apple-system,
+          BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #root { min-height: 100%; background: #fafaf9; }
+
+      /* App splash — React가 마운트해도 #root 밖이라 그대로 남아 있다가,
+         JS가 최소 표시시간 후에 .splash-hide 클래스를 붙이면 부드럽게 사라짐 */
+      /* no-splash 모드(특정 페이지 새로고침 등)에선 splash 안 보이게 */
+      html.no-splash #app-splash { display: none; }
+
+      #app-splash {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        background:
+          radial-gradient(120% 90% at 50% 0%, #818cf8 0%, #6366f1 45%, #4338ca 100%);
+        color: white;
+        text-align: center;
+        gap: 18px;
+        padding-bottom: 12vh;
+        z-index: 9999;
+        opacity: 1;
+        overflow: hidden;
+        /* entry 애니메이션은 일부러 빼고 splash는 즉시 opacity:1로 나타남.
+           CSS animation 으로 opacity 를 잡으면 exit transition 이 깨지는 문제 있음. */
+        transition: opacity 1300ms cubic-bezier(0.4, 0, 0.2, 1);
+        animation: splashBgPulse 4.4s ease-in-out infinite;
+      }
+      /* 배경 위에 떠다니는 부드러운 light orb — 살짝 움직이는 분위기 */
+      #app-splash::before,
+      #app-splash::after {
+        content: '';
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(60px);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      #app-splash::before {
+        width: 320px; height: 320px;
+        background: rgba(168, 162, 255, 0.85);
+        top: -80px; left: -60px;
+        animation: splashOrbA 9s ease-in-out infinite;
+      }
+      #app-splash::after {
+        width: 280px; height: 280px;
+        background: rgba(236, 72, 153, 0.55);
+        bottom: -60px; right: -80px;
+        animation: splashOrbB 11s ease-in-out infinite;
+      }
+      #app-splash.splash-hide {
+        opacity: 0;
+        pointer-events: none;
+        /* 페이드 아웃 중에 배경 filter 펄스가 미세하게 깜빡일 수 있으니 정지 */
+        animation: none;
+      }
+      #app-splash.splash-hide .splash-logo {
+        /* bob 무한 애니메이션이 transform을 매 프레임 덮으므로 끄고 스케일 적용 */
+        animation: none;
+        transform: scale(0.94);
+        transition: transform 1300ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .splash-logo-wrap {
+        position: relative;
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 104px; height: 104px;
+      }
+      .splash-logo {
+        position: relative;
+        width: 104px; height: 104px;
+        border-radius: 24px;
+        background-image: url('/icon.png');
+        background-size: cover;
+        background-position: center;
+        box-shadow:
+          0 16px 40px rgba(0, 0, 0, 0.28),
+          0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+          0 0 0 0 rgba(255, 255, 255, 0.0);
+        animation: splashLogoBob 2.4s ease-in-out infinite, splashLogoGlow 2.4s ease-in-out infinite;
+        transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1);
+        z-index: 1;
+      }
+      /* 로고 뒤에 부드러운 ring halo — 천천히 커졌다 작아짐 */
+      .splash-logo-halo {
+        position: absolute;
+        width: 180px; height: 180px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 60%);
+        z-index: 0;
+        animation: splashHalo 2.4s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .splash-title {
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        opacity: 0.95;
+      }
+      .splash-dots {
+        display: flex; gap: 7px;
+        margin-top: 4px;
+      }
+      .splash-dots span {
+        width: 7px; height: 7px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        animation: splashDot 1.2s ease-in-out infinite;
+      }
+      .splash-dots span:nth-child(2) { animation-delay: 0.18s; }
+      .splash-dots span:nth-child(3) { animation-delay: 0.36s; }
+
+      @keyframes splashLogoBob {
+        0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+        25%      { transform: translateY(-4px) scale(1.02) rotate(-1.5deg); }
+        50%      { transform: translateY(-10px) scale(1.05) rotate(0deg); }
+        75%      { transform: translateY(-4px) scale(1.02) rotate(1.5deg); }
+      }
+      @keyframes splashLogoGlow {
+        0%, 100% {
+          box-shadow:
+            0 16px 40px rgba(0, 0, 0, 0.28),
+            0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+            0 0 0 0 rgba(255, 255, 255, 0.0);
+        }
+        50% {
+          box-shadow:
+            0 16px 40px rgba(0, 0, 0, 0.28),
+            0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+            0 0 60px 10px rgba(255, 255, 255, 0.22);
+        }
+      }
+      @keyframes splashHalo {
+        0%, 100% { transform: scale(0.85); opacity: 0.55; }
+        50%      { transform: scale(1.18); opacity: 1; }
+      }
+      @keyframes splashBgPulse {
+        0%, 100% { filter: brightness(1) saturate(1); }
+        50%      { filter: brightness(1.08) saturate(1.15); }
+      }
+      @keyframes splashOrbA {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50%      { transform: translate(40px, 60px) scale(1.15); }
+      }
+      @keyframes splashOrbB {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50%      { transform: translate(-40px, -50px) scale(1.1); }
+      }
+      @keyframes splashDot {
+        0%, 100% { transform: translateY(0) scale(0.55); opacity: 0.4; }
+        40%      { transform: translateY(-6px) scale(1.2); opacity: 1; }
+        70%      { transform: translateY(0) scale(0.7); opacity: 0.6; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="app-splash" aria-hidden="true">
+      <div class="splash-logo-wrap">
+        <div class="splash-logo-halo"></div>
+        <div class="splash-logo"></div>
+      </div>
+      <div class="splash-title">우리집 사진첩</div>
+      <div class="splash-dots"><span></span><span></span><span></span></div>
+    </div>
+    <script>
+      // 스플래시 시작 시각 기록 — 최소 표시시간 보장용
+      window.__splashStartedAt = Date.now();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,41 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.bak*
+*.bak
+*.bak.*
+*.bak2
+.DS_Store
+*.log
+*.tsbuildinfo
+
+# Runtime data
+data/originals/*
+data/thumbs/*
+data/db/*
+data/backups/*
+data/certs/
+data/caddy-certs/
+data/files/*
+data/upload-sessions/*
+!data/originals/.gitkeep
+!data/thumbs/.gitkeep
+!data/db/.gitkeep
+!data/backups/.gitkeep
+
+# Editor
+.claude/
+.vscode/
+.idea/
+*.swp
+
+# Local design scratch state
+demo_ui_design/.design-canvas.state.json
+
+# Generated standalone exports
+/fileshare_ui.html
+
+# Prisma
+apps/server/prisma/migrations/dev.db*

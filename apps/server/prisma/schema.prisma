@@ -1,0 +1,460 @@
+// Prisma schema — SQLite for MVP. Switch provider to "postgresql" when scaling.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================================
+// Auth / Users
+// =====================================================================
+//
+// 참고: SQLite는 Prisma enum을 지원하지 않아 String + 코드 레벨 상수로 처리.
+// status: "pending" | "active" | "disabled"
+
+model User {
+  id                 String    @id @default(cuid())
+  // Unipass 표시 이름 스냅샷. Ouri에서 직접 수정하지 않고 로그인/연동 때 동기화한다.
+  displayName        String
+  status             String    @default("pending")
+  isAdmin            Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  approvedAt         DateTime?
+  unipassUserId      String    @unique
+  unipassLinkedAt    DateTime?
+  // Unipass 아이디/핸들 스냅샷. Ouri에서 직접 수정하지 않고 로그인/연동 때 동기화한다.
+  unipassHandle      String?
+  // Unipass 프로필 사진 URL 스냅샷. 상대 경로는 서버에서 Unipass 절대 URL로 정규화한다.
+  unipassAvatarUrl   String?
+  // 표시 옵션 — JSON 문자열. { sortDefault, gridSize, videoAutoplay?, wifiOnly? }
+  displayPreferences String?
+
+  sessions              Session[]
+  friendshipsA          Friendship[]      @relation("UserA")
+  friendshipsB          Friendship[]      @relation("UserB")
+  ownedGroups           Group[]           @relation("GroupOwner")
+  groupMemberships      GroupMember[]
+  ownedProjects         Project[]         @relation("Owner")
+  memberships           ProjectMember[]
+  uploadedMedia         Media[]
+  ownedFileSpaces       FileSpace[]       @relation("FileSpaceOwner")
+  fileSpaceMemberships  FileSpaceMember[]
+  uploadedFileNodes     FileNode[]        @relation("FileNodeUploader")
+  createdFileShareLinks FileShareLink[]   @relation("FileShareLinkCreator")
+  auditEvents           AuditLog[]        @relation("Actor")
+  notificationsReceived Notification[]    @relation("Recipient")
+  notificationsActed    Notification[]    @relation("Actor")
+  activityEvents        AlbumActivity[]   @relation("ActivityActor")
+
+  @@index([status])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// =====================================================================
+// Friends
+// =====================================================================
+// status: "pending" | "accepted"
+
+model Friendship {
+  id            String    @id @default(cuid())
+  // 정규화: userAId < userBId 로 저장
+  userAId       String
+  userA         User      @relation("UserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId       String
+  userB         User      @relation("UserB", fields: [userBId], references: [id], onDelete: Cascade)
+  requestedById String
+  status        String    @default("pending")
+  createdAt     DateTime  @default(now())
+  acceptedAt    DateTime?
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+// =====================================================================
+// Projects (앨범)
+// =====================================================================
+
+model Group {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  members         GroupMember[]
+  fileSpaces      FileSpace[]
+  fileSpaceShares FileSpaceGroupShare[]
+
+  @@index([ownerId])
+}
+
+// role: "owner" | "member"
+// status: "pending" (초대 받았지만 수락 전) | "active" (수락 완료)
+model GroupMember {
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String   @default("member")
+  status      String   @default("pending")
+  invitedById String?
+  joinedAt    DateTime @default(now())
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@index([userId, status])
+}
+
+model Project {
+  id            String    @id @default(cuid())
+  ownerId       String
+  owner         User      @relation("Owner", fields: [ownerId], references: [id])
+  title         String
+  coverMediaId  String?   @unique
+  coverMedia    Media?    @relation("Cover", fields: [coverMediaId], references: [id])
+  createdAt     DateTime  @default(now())
+  tripStartDate DateTime?
+  tripEndDate   DateTime?
+  location      String?
+  // "general" | "trip" — trip이면 지도 뷰에 경로 폴리라인 표시
+  type          String    @default("general")
+  // 배너 배경 — "auto" | "solid" | "photo"
+  bannerType    String    @default("auto")
+  // auto/solid 모드에서 사용. '#RRGGBB'. auto는 서버가 cover에서 추출
+  bannerColor   String?
+  // photo 모드 — 해당 앨범 내 Media id
+  bannerPhotoId String?
+
+  members  ProjectMember[]
+  media    Media[]         @relation("ProjectMedia")
+  activity AlbumActivity[] @relation("ProjectActivity")
+
+  @@index([ownerId])
+  @@index([tripStartDate])
+}
+
+// role: "owner" | "member"
+// status: "pending" (초대 받았지만 수락 전) | "active" (수락 완료)
+model ProjectMember {
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String   @default("member")
+  status      String   @default("active")
+  invitedById String?
+  joinedAt    DateTime @default(now())
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@index([userId, status])
+}
+
+// =====================================================================
+// Media (사진/영상)
+// =====================================================================
+// kind: "image" | "video"
+
+model Media {
+  id         String  @id @default(cuid())
+  projectId  String
+  project    Project @relation("ProjectMedia", fields: [projectId], references: [id], onDelete: Cascade)
+  uploaderId String
+  uploader   User    @relation(fields: [uploaderId], references: [id])
+
+  kind             String
+  originalFilename String
+  mime             String
+  sizeBytes        BigInt
+  storagePath      String // 디스크 절대 경로
+  thumbSmPath      String?
+  thumbMdPath      String?
+  thumbLgPath      String?
+  videoPreviewPath String?
+  videoPreviewStatus String @default("skipped") // skipped | pending | done | failed
+
+  width       Int?
+  height      Int?
+  durationSec Float?
+  takenAt     DateTime?
+  uploadedAt  DateTime  @default(now())
+  sha256      String
+
+  // 카메라
+  cameraMake  String?
+  cameraModel String?
+  lensModel   String?
+
+  // 사진 노출 정보
+  isoSpeed    Int?
+  fNumber     Float?
+  exposureSec Float?
+  focalLength Float?
+
+  // 영상 코덱
+  videoCodec String?
+  audioCodec String?
+
+  // 위치 (EXIF GPS / iOS QuickTime ISO6709)
+  latitude  Float?
+  longitude Float?
+  altitude  Float?
+
+  // 원본에서 추출된 모든 메타데이터 JSON (raw)
+  metaJson String?
+
+  // 단순 status: 워커 처리용
+  thumbStatus String @default("pending") // pending | done | failed
+
+  coverFor Project? @relation("Cover")
+
+  @@index([projectId, takenAt])
+  @@index([projectId, uploadedAt])
+  @@index([uploaderId])
+  @@index([sha256])
+  @@index([latitude])
+}
+
+// =====================================================================
+// File library (파일함)
+// =====================================================================
+// kind: "personal" | "group" | "shared"
+
+model FileSpace {
+  id          String    @id @default(cuid())
+  kind        String
+  name        String
+  description String?
+  color       String
+  isDefault   Boolean   @default(false)
+  ownerId     String
+  owner       User      @relation("FileSpaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       Group?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  trashedAt   DateTime?
+  deleteAfter DateTime?
+
+  members      FileSpaceMember[]
+  groupShares  FileSpaceGroupShare[]
+  friendShares FileSpaceFriendShare[]
+  nodes        FileNode[]
+  shareLinks   FileShareLink[]
+
+  @@index([ownerId])
+  @@index([kind, ownerId])
+  @@index([groupId])
+  @@index([kind, groupId])
+  @@index([trashedAt])
+}
+
+model FileSpaceMember {
+  spaceId  String
+  space    FileSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String    @default("member")
+  status   String    @default("active")
+  joinedAt DateTime  @default(now())
+
+  @@id([spaceId, userId])
+  @@index([userId, status])
+}
+
+model FileSpaceGroupShare {
+  spaceId String
+  space   FileSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  groupId String
+  group   Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, groupId])
+  @@index([groupId])
+}
+
+model FileSpaceFriendShare {
+  spaceId  String
+  space    FileSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  friendId String
+
+  @@id([spaceId, friendId])
+  @@index([friendId])
+}
+
+// type: "folder" | "file"
+model FileNode {
+  id               String     @id @default(cuid())
+  spaceId          String
+  space            FileSpace  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parentId         String?
+  parent           FileNode?  @relation("FileTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children         FileNode[] @relation("FileTree")
+  type             String
+  name             String
+  uploaderId       String
+  uploader         User       @relation("FileNodeUploader", fields: [uploaderId], references: [id])
+  color            String?
+  kind             String?
+  mime             String?
+  sizeBytes        BigInt?
+  storagePath      String?
+  originalFilename String?
+  sha256           String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  trashedAt        DateTime?
+  deleteAfter      DateTime?
+  shareLinks       FileShareLink[]
+
+  @@index([spaceId, parentId])
+  @@index([uploaderId])
+  @@index([trashedAt])
+  @@index([sha256])
+}
+
+// targetType: "space" | "folder" | "file"
+// token is selector.verifier. Only selector and verifierHash are stored.
+model FileShareLink {
+  id             String    @id @default(cuid())
+  selector       String    @unique
+  verifierHash   String
+  targetType     String
+  spaceId        String
+  space          FileSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  nodeId         String?
+  node           FileNode? @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User      @relation("FileShareLinkCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  disabledAt     DateTime?
+  lastAccessedAt DateTime?
+  accessCount    Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([spaceId])
+  @@index([nodeId])
+  @@index([createdById])
+  @@index([expiresAt])
+  @@index([disabledAt])
+  @@index([targetType, spaceId, nodeId, disabledAt])
+}
+
+// =====================================================================
+// Admin: Settings, Audit, Backup
+// =====================================================================
+
+// =====================================================================
+// Notifications
+// =====================================================================
+// type: "friend_request" | "friend_accepted" | "project_member_added"
+// payload: JSON-encoded; e.g. { friendshipId, projectId, projectTitle }
+
+model Notification {
+  id          String    @id @default(cuid())
+  recipientId String
+  recipient   User      @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?     @relation("Actor", fields: [actorId], references: [id], onDelete: SetNull)
+  type        String
+  payload     String? // JSON-encoded
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([recipientId, createdAt])
+  @@index([recipientId, readAt])
+}
+
+// =====================================================================
+// Album activity log
+// =====================================================================
+// 앨범 안에서 일어난 모든 사건의 타임라인. 멤버 모두에게 보임.
+// 개인 알림(Notification)과 별개의 소스.
+// actionType:
+//   photo_uploaded | photo_deleted
+//   cover_changed | album_renamed | album_location_changed | album_type_changed
+//   member_added | member_removed
+//   share_link_created | share_link_revoked  (후속)
+model AlbumActivity {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation("ProjectActivity", fields: [projectId], references: [id], onDelete: Cascade)
+  actorId    String
+  actor      User     @relation("ActivityActor", fields: [actorId], references: [id])
+  actionType String
+  targetType String? // "media" | "user" | "album"
+  targetId   String?
+  payload    String? // JSON-encoded (count, oldValue, newValue 등)
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([actorId])
+}
+
+model Setting {
+  key         String   @id
+  valueJson   String // JSON-encoded
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation("Actor", fields: [actorId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  beforeJson String?
+  afterJson  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model BackupConfig {
+  id              Int      @id @default(1) // singleton row
+  method          String   @default("rsync") // rsync | dump
+  targetPath      String   @default("")
+  scheduleCron    String   @default("0 3 * * *")
+  retentionDaily  Int      @default(30)
+  retentionWeekly Int      @default(12)
+  compress        Boolean  @default(true)
+  enabled         Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+}
+
+model BackupRun {
+  id           String    @id @default(cuid())
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  status       String // running | success | failed
+  filesCount   Int?
+  bytesTotal   BigInt?
+  targetPath   String?
+  logText      String?
+  errorMessage String?
+
+  @@index([startedAt])
+}
